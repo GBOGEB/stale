@@ -1,0 +1,64 @@
+# Glob Pattern Manifest
+# This file describes the reusable configuration patterns and directories
+# used by the update-config-files workflow
+
+version: "1.0"
+
+# Configuration for the update-config-files workflow
+workflow:
+  name: "Update configuration files"
+  description: "Synchronizes configuration files from actions/reusable-workflows repository"
+  
+# Source repository configuration
+source:
+  repository: "actions/reusable-workflows"
+  branch: "main"
+  base_path: "reusable-configurations"
+  
+# Target repository configuration  
+target:
+  branch: "main"
+  default_folder: "./"
+  
+# File patterns to synchronize
+# These patterns are used to match files in the source repository
+# that should be copied to the target repository
+patterns:
+  # Default pattern matches all files
+  - pattern: "*"
+    description: "All configuration files"
+    required: false
+    
+  # Common configuration file patterns
+  - pattern: "*.yml"
+    description: "YAML workflow files"
+    required: false
+    
+  - pattern: "*.yaml"
+    description: "YAML configuration files"
+    required: false
+    
+  - pattern: ".*.yml"
+    description: "Hidden YAML files"
+    required: false
+    
+  - pattern: ".*.yaml"
+    description: "Hidden YAML configuration files"
+    required: false
+
+# Validation rules
+validation:
+  # Check that target directory exists
+  check_target_directory: true
+  
+  # Fail if no files match the pattern
+  fail_on_no_match: true
+  
+  # Log warnings for missing patterns
+  warn_on_missing_patterns: true
+  
+# Directories that must exist in the target repository
+required_directories:
+  - path: "./"
+    description: "Root directory of the repository"
+    create_if_missing: false
