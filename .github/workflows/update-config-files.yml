@@ -4,8 +4,211 @@ on:
   schedule:
     - cron: '0 3 * * 0'
   workflow_dispatch:
+    inputs:
+      target-folder:
+        description: 'Target folder for config files'
+        required: false
+        default: './'
+      reference-files:
+        description: 'File patterns to sync (comma-separated)'
+        required: false
+        default: '*'
+      base-pr-branch:
+        description: 'Base branch for PR'
+        required: false
+        default: 'main'
+      head-pr-branch:
+        description: 'Head branch for PR'
+        required: false
+        default: 'tool-config-auto-update'
 
 jobs:
-  call-update-configuration-files:
+  update-configuration-files:
     name: Update configuration files
-    uses: actions/reusable-workflows/.github/workflows/update-config-files.yml@main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base-pr-branch || 'main' }}
+          path: target
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          repository: actions/reusable-workflows
+          ref: main
+          path: source
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      
+      - name: Update configuration files with validation
+        id: update-config
+        working-directory: target
+        run: |
+          set -e
+          
+          # Configuration
+          TARGET_FOLDER="${{ inputs.target-folder || './' }}"
+          FILE_PATTERNS="${{ inputs.reference-files || '*' }}"
+          HEAD_BRANCH="${{ inputs.head-pr-branch || 'tool-config-auto-update' }}"
+          SOURCE_FOLDER="/home/runner/work/stale/stale/source/reusable-configurations"
+          
+          echo "::group::Configuration"
+          echo "Target folder: ${TARGET_FOLDER}"
+          echo "File patterns: ${FILE_PATTERNS}"
+          echo "Head branch: ${HEAD_BRANCH}"
+          echo "Source folder: ${SOURCE_FOLDER}"
+          echo "::endgroup::"
+          
+          # Validate target directory exists
+          echo "::group::Validating target directory"
+          if [ ! -d "${TARGET_FOLDER}" ]; then
+            # Create the target directory if it doesn't exist
+            echo "::warning::Target directory '${TARGET_FOLDER}' does not exist. Creating it..."
+            mkdir -p "${TARGET_FOLDER}"
+          fi
+          
+          # Verify it's actually a directory
+          if [ ! -d "${TARGET_FOLDER}" ]; then
+            echo "::error::Failed to create or access target directory: '${TARGET_FOLDER}'"
+            exit 1
+          fi
+          echo "✓ Target directory validated: ${TARGET_FOLDER}"
+          echo "::endgroup::"
+          
+          # Validate source directory exists
+          echo "::group::Validating source directory"
+          if [ ! -d "${SOURCE_FOLDER}" ]; then
+            echo "::error::Source configuration folder does not exist: ${SOURCE_FOLDER}"
+            exit 1
+          fi
+          echo "✓ Source directory validated: ${SOURCE_FOLDER}"
+          echo "::endgroup::"
+          
+          # Create new branch
+          echo "::group::Creating branch"
+          git checkout -b "${HEAD_BRANCH}" 2>/dev/null || git checkout "${HEAD_BRANCH}"
+          echo "✓ Switched to branch: ${HEAD_BRANCH}"
+          echo "::endgroup::"
+          
+          # Parse file patterns into array with validation
+          echo "::group::Parsing file patterns"
+          IFS=',' read -ra arrOfFilePatterns <<< "${FILE_PATTERNS//[[:space:]]/}"
+          
+          if [ ${#arrOfFilePatterns[@]} -eq 0 ]; then
+            echo "::error::No file patterns provided"
+            exit 1
+          fi
+          
+          echo "File patterns array (${#arrOfFilePatterns[@]} patterns):"
+          for i in "${!arrOfFilePatterns[@]}"; do
+            echo "  [$i]: '${arrOfFilePatterns[$i]}'"
+          done
+          echo "::endgroup::"
+          
+          # Process each file pattern
+          echo "::group::Processing file patterns"
+          UPDATED_FILES=0
+          FAILED_PATTERNS=0
+          
+          for filePattern in "${arrOfFilePatterns[@]}"; do
+            # Skip empty patterns
+            if [ -z "${filePattern}" ]; then
+              echo "::warning::Skipping empty file pattern"
+              continue
+            fi
+            
+            echo ""
+            echo "Processing pattern: '${filePattern}'"
+            
+            # Check if files matching pattern exist in source
+            MATCHING_FILES=$(find "${SOURCE_FOLDER}" -name "${filePattern}" -type f 2>/dev/null || true)
+            
+            if [ -z "${MATCHING_FILES}" ]; then
+              echo "::warning::No files found matching pattern '${filePattern}' in ${SOURCE_FOLDER}"
+              ((FAILED_PATTERNS++))
+              continue
+            fi
+            
+            # Count matching files
+            FILE_COUNT=$(echo "${MATCHING_FILES}" | wc -l)
+            echo "Found ${FILE_COUNT} file(s) matching pattern '${filePattern}'"
+            
+            # Sync files using rsync
+            if rsync -av --include="${filePattern}" --exclude="*" "${SOURCE_FOLDER}/" "${TARGET_FOLDER}/"; then
+              echo "✓ Successfully synced files matching '${filePattern}'"
+              ((UPDATED_FILES++))
+            else
+              echo "::error::Failed to sync files matching pattern '${filePattern}'"
+              ((FAILED_PATTERNS++))
+            fi
+          done
+          
+          echo ""
+          echo "Summary:"
+          echo "  Patterns processed: ${#arrOfFilePatterns[@]}"
+          echo "  Successfully updated: ${UPDATED_FILES}"
+          echo "  Failed patterns: ${FAILED_PATTERNS}"
+          echo "::endgroup::"
+          
+          # Check for changes
+          echo "::group::Checking for changes"
+          git add .
+          
+          if git diff --ignore-space-at-eol --staged --quiet; then
+            echo "::notice::No configuration file changes detected. Files are already up to date."
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "✓ Configuration file changes detected"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            
+            # Show what changed
+            echo ""
+            echo "Changed files:"
+            git diff --staged --name-only | sed 's/^/  - /'
+          fi
+          echo "::endgroup::"
+      
+      - name: Commit and push changes
+        if: steps.update-config.outputs.has-changes == 'true'
+        working-directory: target
+        run: |
+          git commit -m "chore: update configuration files from actions/reusable-workflows
+          
+          Auto-updated by workflow run: ${{ github.run_id }}"
+          git push origin ${{ inputs.head-pr-branch || 'tool-config-auto-update' }} --force
+      
+      - name: Check if PR exists
+        if: steps.update-config.outputs.has-changes == 'true'
+        id: check-pr
+        run: |
+          PR_EXISTS=$(gh pr list --head ${{ inputs.head-pr-branch || 'tool-config-auto-update' }} --base ${{ inputs.base-pr-branch || 'main' }} --json number --jq length)
+          echo "pr-exists=${PR_EXISTS}" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create or update pull request
+        if: steps.update-config.outputs.has-changes == 'true' && steps.check-pr.outputs.pr-exists == '0'
+        working-directory: target
+        run: |
+          gh pr create \
+            --title "chore: update configuration files" \
+            --body "This PR updates configuration files from the [actions/reusable-workflows](https://github.com/actions/reusable-workflows) repository.
+          
+          **Auto-generated by workflow run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          Please review the changes before merging." \
+            --base ${{ inputs.base-pr-branch || 'main' }} \
+            --head ${{ inputs.head-pr-branch || 'tool-config-auto-update' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
