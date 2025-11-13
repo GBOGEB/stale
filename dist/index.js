@@ -289,6 +289,13 @@ class Issue {
         this.assignees = issue.assignees || [];
         this.isStale = (0, is_labeled_1.isLabeled)(this, this.staleLabel);
         this.markedStaleThisRun = false;
+        if (typeof issue.type === 'object' &&
+            issue.type !== null) {
+            this.issue_type = issue.type.name;
+        }
+        else {
+            this.issue_type = undefined;
+        }
     }
     get isPullRequest() {
         return (0, is_pull_request_1.isPullRequest)(this);
@@ -505,6 +512,18 @@ class IssuesProcessor {
                 issueLogger.info(`Skipping this $$type because its assignees list is empty`);
                 IssuesProcessor._endIssueProcessing(issue);
                 return; // If the issue has an 'include-only-assigned' option set, process only issues with nonempty assignees list
+            }
+            if (this.options.onlyIssueTypes) {
+                const allowedTypes = this.options.onlyIssueTypes
+                    .split(',')
+                    .map(t => t.trim().toLowerCase())
+                    .filter(Boolean);
+                const issueType = (issue.issue_type || '').toLowerCase();
+                if (!allowedTypes.includes(issueType)) {
+                    issueLogger.info(`Skipping this $$type because its type ('${issue.issue_type}') is not in onlyIssueTypes (${allowedTypes.join(', ')})`);
+                    IssuesProcessor._endIssueProcessing(issue);
+                    return;
+                }
             }
             const onlyLabels = (0, words_to_list_1.wordsToList)(this._getOnlyLabels(issue));
             if (onlyLabels.length > 0) {
@@ -742,6 +761,7 @@ class IssuesProcessor {
         });
     }
     getRateLimit() {
+        var _a;
         return __awaiter(this, void 0, void 0, function* () {
             const logger = new logger_1.Logger();
             try {
@@ -749,7 +769,13 @@ class IssuesProcessor {
                 return new rate_limit_1.RateLimit(rateLimitResult.data.rate);
             }
             catch (error) {
-                logger.error(`Error when getting rateLimit: ${error.message}`);
+                const status = error === null || error === void 0 ? void 0 : error.status;
+                const message = (_a = error === null || error === void 0 ? void 0 : error.message) !== null && _a !== void 0 ? _a : String(error);
+                if (status === 404 && message.includes('Rate limiting is not enabled')) {
+                    logger.warning('Rate limiting is not enabled on this instance. Proceeding without rate limit checks.');
+                    return undefined;
+                }
+                logger.error(`Error when getting rateLimit: ${message}`);
             }
         });
     }
@@ -2225,6 +2251,7 @@ var Option;
     Option["IgnorePrUpdates"] = "ignore-pr-updates";
     Option["ExemptDraftPr"] = "exempt-draft-pr";
     Option["CloseIssueReason"] = "close-issue-reason";
+    Option["OnlyIssueTypes"] = "only-issue-types";
 })(Option || (exports.Option = Option = {}));
 
 
@@ -2590,7 +2617,8 @@ function _getAndValidateArgs() {
         ignorePrUpdates: _toOptionalBoolean('ignore-pr-updates'),
         exemptDraftPr: core.getInput('exempt-draft-pr') === 'true',
         closeIssueReason: core.getInput('close-issue-reason'),
-        includeOnlyAssigned: core.getInput('include-only-assigned') === 'true'
+        includeOnlyAssigned: core.getInput('include-only-assigned') === 'true',
+        onlyIssueTypes: core.getInput('only-issue-types')
     };
     for (const numberInput of ['days-before-stale']) {
         if (isNaN(parseFloat(core.getInput(numberInput)))) {
