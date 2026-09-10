@@ -1,0 +1,17 @@
+schema: gbogeb-federation-activity/1.0.0
+as_of: '2026-09-10T06:53:00+02:00'
+repo: GBOGEB/stale
+classification: MAINTENANCE_ONLY
+federation_role: NONE
+recent_activity:
+  - {pr: 8, state: OPEN_AT_CENSUS, role: dependency_maintenance}
+mip_state: {modernize: MAINTENANCE_ONLY, innovate: NOT_SELECTED, perpetuate: DEPENDENCY_AUTOMATION}
+three_p_capability: {P1_source_atom: false, P2_integration_graph: false, P3_evidence_control: false}
+runtime_proof: {state: NOT_REQUIRED_FOR_FEDERATION}
+source_authority: {state: NONE, may_override_qps_child: false}
+produces_receipts: []
+consumes_receipts: []
+current_blocker: none_for_federation
+next_victory: keep dependency maintenance isolated; do not allocate federation workers unless repo role changes
+federation_dependencies: {upstream: [], downstream: []}
+controls: {federation_worker_allocation: 0, engineering_credit: false, compliance_credit: false}
