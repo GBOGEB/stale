@@ -1,4 +1,4 @@
-name: REX D2 prettier sync
+name: REX D2 prettier export
 
 on:
   push:
@@ -6,19 +6,19 @@ on:
       - gm-dmaic-rex-d2-prettier-20260926
     paths:
       - '.github/workflows/rex-d2-prettier-sync.yml'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  sync:
+  export:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact branch head
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,13 +32,9 @@ jobs:
       - name: Format only the observed D2 file
         run: npx prettier --config ./.prettierrc.js --write .github/workflows/update-config-files.yml
 
-      - name: Commit formatting and remove temporary helper
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/update-config-files.yml
-          git rm .github/workflows/rex-d2-prettier-sync.yml
-          git commit -m "GM DMAIC REX D2: normalize workflow formatting"
-          git push origin "HEAD:${BRANCH}"
+      - name: Upload formatted workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: rex-d2-prettier-output
+          path: .github/workflows/update-config-files.yml
+          if-no-files-found: error
