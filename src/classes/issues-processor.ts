@@ -37,11 +37,16 @@ import {getSortField} from '../functions/get-sort-field';
 
 export class IssuesProcessor {
   private static _updatedSince(timestamp: string, num_days: number): boolean {
-    const daysInMillis = 1000 * 60 * 60 * 24 * num_days;
+    // Date timestamps have millisecond precision. Normalize fractional-day
+    // thresholds to that same precision so an exact boundary is deterministic
+    // across runner clocks/platforms.
+    const daysInMillis = Math.round(1000 * 60 * 60 * 24 * num_days);
     const millisSinceLastUpdated =
       new Date().getTime() - new Date(timestamp).getTime();
 
-    return millisSinceLastUpdated <= daysInMillis;
+    // At the configured threshold the item is eligible to become stale, so
+    // only timestamps strictly younger than the threshold count as updated.
+    return millisSinceLastUpdated < daysInMillis;
   }
 
   private static _endIssueProcessing(issue: Issue): void {
