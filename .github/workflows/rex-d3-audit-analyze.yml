@@ -1,0 +1,64 @@
+name: REX D3 audit analyze
+
+on:
+  push:
+    branches:
+      - gm-dmaic-rex-d3-audit-analyze-20260926
+    paths:
+      - '.github/workflows/rex-d3-audit-analyze.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Capture baseline audit
+        shell: bash
+        run: |
+          npm audit --json > audit-before.json || true
+
+      - name: Apply non-breaking audit fix to lock state
+        shell: bash
+        run: |
+          npm audit fix --package-lock-only --ignore-scripts || true
+
+      - name: Capture post-fix audit
+        shell: bash
+        run: |
+          npm audit --package-lock-only --json > audit-after.json || true
+
+      - name: Record dependency diff
+        shell: bash
+        run: |
+          git diff -- package.json package-lock.json > dependency-diff.patch || true
+          git status --short > dependency-status.txt
+
+      - name: Upload D3 analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: rex-d3-audit-analysis
+          path: |
+            package.json
+            package-lock.json
+            audit-before.json
+            audit-after.json
+            dependency-diff.patch
+            dependency-status.txt
+          if-no-files-found: error
