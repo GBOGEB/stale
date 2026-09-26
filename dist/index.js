@@ -395,9 +395,14 @@ const get_sort_field_1 = __nccwpck_require__(9551);
  */
 class IssuesProcessor {
     static _updatedSince(timestamp, num_days) {
-        const daysInMillis = 1000 * 60 * 60 * 24 * num_days;
+        // Date timestamps have millisecond precision. Normalize fractional-day
+        // thresholds to that same precision so an exact boundary is deterministic
+        // across runner clocks/platforms.
+        const daysInMillis = Math.round(1000 * 60 * 60 * 24 * num_days);
         const millisSinceLastUpdated = new Date().getTime() - new Date(timestamp).getTime();
-        return millisSinceLastUpdated <= daysInMillis;
+        // At the configured threshold the item is eligible to become stale, so
+        // only timestamps strictly younger than the threshold count as updated.
+        return millisSinceLastUpdated < daysInMillis;
     }
     static _endIssueProcessing(issue) {
         const consumedOperationsCount = issue.operations.getConsumedOperationsCount();
