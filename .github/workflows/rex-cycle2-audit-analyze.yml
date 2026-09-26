@@ -1,0 +1,59 @@
+name: REX cycle2 audit analyze
+
+on:
+  push:
+    branches:
+      - gm-dmaic-rex-cycle2-audit-analysis-20260926
+    paths:
+      - '.github/workflows/rex-cycle2-audit-analyze.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Capture baseline audit
+        shell: bash
+        run: npm audit --json > audit-before.json || true
+
+      - name: Apply non-breaking audit fix to lockfile only
+        shell: bash
+        run: npm audit fix --package-lock-only --ignore-scripts || true
+
+      - name: Capture post-fix audit
+        shell: bash
+        run: npm audit --package-lock-only --json > audit-after.json || true
+
+      - name: Record dependency delta
+        shell: bash
+        run: |
+          git diff -- package.json package-lock.json > dependency-diff.patch || true
+          git status --short > dependency-status.txt
+
+      - name: Upload audit analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: rex-cycle2-audit-analysis
+          path: |
+            audit-before.json
+            audit-after.json
+            dependency-diff.patch
+            dependency-status.txt
+            package.json
+            package-lock.json
+          if-no-files-found: error
