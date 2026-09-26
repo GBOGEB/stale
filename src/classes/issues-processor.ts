@@ -82,7 +82,11 @@ export class IssuesProcessor {
   constructor(options: IIssuesProcessorOptions, state: IState) {
     this.options = options;
     this.state = state;
-    this.client = getOctokit(this.options.repoToken, undefined, retry);
+    this.client = getOctokit(
+      this.options.repoToken,
+      undefined,
+      retry as unknown as Parameters<typeof getOctokit>[2]
+    );
     this.operations = new StaleOperations(this.options);
 
     this._logger.info(
@@ -965,7 +969,14 @@ export class IssuesProcessor {
           repo: context.repo.repo,
           issue_number: issue.number,
           state: 'closed',
-          state_reason: this.options.closeIssueReason || undefined
+          state_reason: ['completed', 'reopened', 'not_planned'].includes(
+            this.options.closeIssueReason
+          )
+            ? (this.options.closeIssueReason as
+                | 'completed'
+                | 'reopened'
+                | 'not_planned')
+            : undefined
         });
       }
     } catch (error) {

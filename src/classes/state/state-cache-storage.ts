@@ -27,7 +27,11 @@ const unlinkSafely = (filePath: string) => {
 
 const getOctokitClient = () => {
   const token = core.getInput('repo-token');
-  return getOctokit(token, undefined, octokitRetry);
+  return getOctokit(
+    token,
+    undefined,
+    octokitRetry as unknown as Parameters<typeof getOctokit>[2]
+  );
 };
 
 const checkIfCacheExists = async (cacheKey: string): Promise<boolean> => {
