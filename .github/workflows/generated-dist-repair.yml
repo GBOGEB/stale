@@ -25,7 +25,7 @@ jobs:
       - name: Install exact selected graph
         run: npm ci
       - name: Regenerate dist only
-        run: npx --no-install ncc build
+        run: npm run build
       - name: Guard bounded diff and self-remove runner
         shell: bash
         run: |
