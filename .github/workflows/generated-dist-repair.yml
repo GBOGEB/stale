@@ -1,4 +1,5 @@
 name: Generated dist repair
+# one-shot fix-forward after #19 staging workflow was merged
 
 on:
   pull_request:
