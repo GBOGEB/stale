@@ -1,0 +1,45 @@
+name: Generated dist repair
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.head_ref == 'gm-generated-dist-cache-v5-closeout-20260929'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gm-generated-dist-cache-v5-closeout-20260929
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install exact selected graph
+        run: npm ci
+      - name: Regenerate dist only
+        run: npx --no-install ncc build
+      - name: Guard bounded diff and self-remove runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          unexpected="$(git status --porcelain | awk '{print $2}' | grep -vE '^(dist/|\.github/workflows/generated-dist-repair\.yml$)' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected generated paths:"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+          grep -q '"name":"@actions/cache","version":"5.1.0"' dist/index.js
+          git rm .github/workflows/generated-dist-repair.yml
+          git add dist
+          git diff --cached --name-only
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: regenerate dist for cache v5 graph'
+          git push origin HEAD:gm-generated-dist-cache-v5-closeout-20260929
