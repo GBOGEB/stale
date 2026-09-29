@@ -1,0 +1,35 @@
+name: Temporary Licensed cache regeneration
+on:
+  push:
+    branches:
+      - gm-licensed-cache-refresh-20260929
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: gm-licensed-cache-refresh-20260929
+      - run: npm ci --ignore-scripts
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install Licensed 5.1.0
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -Lfs -o licensed.tar.gz https://github.com/licensee/licensed/archive/refs/tags/v5.1.0.tar.gz
+          tar -xzf licensed.tar.gz
+          cd licensed-5.1.0
+          bundle install
+      - name: Regenerate and commit license cache
+        run: |
+          BUNDLE_GEMFILE=$RUNNER_TEMP/licensed-5.1.0/Gemfile bundle exec $RUNNER_TEMP/licensed-5.1.0/exe/licensed cache
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .licenses
+          git diff --cached --quiet && exit 0
+          git commit -m "build: refresh Licensed dependency cache"
+          git push origin HEAD:gm-licensed-cache-refresh-20260929
