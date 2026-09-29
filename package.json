@@ -69,11 +69,6 @@
     "typescript": "^5.2.2"
   },
   "overrides": {
-    "@actions/github": {
-      "undici": "6.28.1",
-      "@actions/http-client": {
-        "undici": "6.28.1"
-      }
-    }
+    "undici": "6.28.1"
   }
 }
